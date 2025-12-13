@@ -13,5 +13,5 @@ data class SmsPayload(
     @SerializedName("sms_sender") val smsSender: String,
     @SerializedName("sms_body") val smsBody: String,
     @SerializedName("timestamp") val timestamp: String,
-    @SerializedName("device_id") val deviceId: String
+    @SerializedName("device_id") val deviceId: String // Campo para validar a licença por dispositivo
 )

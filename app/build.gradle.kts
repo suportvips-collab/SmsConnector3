@@ -64,7 +64,8 @@ dependencies {
     // Retrofit (HTTP Client - O "HttpClient" do Android)
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-    // Cliente de E-mail (SMTP)
-    implementation("org.eclipse.angus:angus-mail:2.0.3")
-    implementation("org.eclipse.angus:jakarta.mail:2.0.3")
+    
+    // Cliente de E-mail (SMTP) - Versão estável e recomendada para Android (javax.mail)
+    implementation("com.sun.mail:android-mail:1.6.7")
+    implementation("com.sun.mail:android-activation:1.6.7")
 }
