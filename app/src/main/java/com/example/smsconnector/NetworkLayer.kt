@@ -15,6 +15,6 @@ interface ApiService {
      * @param payload O objeto SmsPayload, que será convertido para JSON e enviado no corpo da requisição.
      * @return Um objeto Call<ResponseBody> que permite a leitura da resposta crua do servidor.
      */
-    @POST("macros/s/AKfycbwRzaf607FMAzepf8NF-KBf-DkzX9Mi0lQ-6YpC6KsqYCUonTMGPbSG7rmYxHyKWqGg/exec")
+    @POST("macros/s/AKfycbxK3EeOTc30aIu9o_pSrJI7k2mvpxWliXqpO6MxlD6aIU-deZox3sxQEOvkmu-MBWqV/exec")
     fun sendSmsData(@Body payload: SmsPayload): Call<ResponseBody>
 }
