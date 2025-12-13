@@ -3,20 +3,16 @@ package com.example.smsconnector
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.provider.Telephony
 import android.util.Log
-import okhttp3.ResponseBody
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
+/**
+ * A única responsabilidade deste BroadcastReceiver é escutar por SMS recebidos
+ * e iniciar o SmsService para fazer o trabalho pesado.
+ */
 class SmsReceiver : BroadcastReceiver() {
-
     override fun onReceive(context: Context, intent: Intent) {
-        Log.e("SMS_DEBUG", "📢 O RECEIVER ACORDOU! Ação recebida: ${intent.action}")
-
         if (intent.action == Telephony.Sms.Intents.SMS_RECEIVED_ACTION) {
             val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
 
@@ -24,51 +20,21 @@ class SmsReceiver : BroadcastReceiver() {
                 val sender = sms.displayOriginatingAddress ?: "Desconhecido"
                 val body = sms.messageBody ?: ""
 
-                Log.d("SMS_DEBUG", "Recebido de: $sender")
+                Log.d("SMS_RECEIVER", "📨 SMS Recebido. Acordando o Serviço...")
 
-                val prefs = context.getSharedPreferences("AppConfig", Context.MODE_PRIVATE)
-                val targetEmail = prefs.getString("target_email", "")
-                val licenseKey = prefs.getString("license_key", "")
+                // Cria a Intent para iniciar o serviço
+                val serviceIntent = Intent(context, SmsService::class.java).apply {
+                    putExtra("sender", sender)
+                    putExtra("body", body)
+                }
 
-                if (!targetEmail.isNullOrEmpty() && !licenseKey.isNullOrEmpty()) {
-                    sendToApi(licenseKey, targetEmail, sender, body)
+                // Inicia o serviço em primeiro plano (necessário para APIs 26+)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(serviceIntent)
+                } else {
+                    context.startService(serviceIntent)
                 }
             }
         }
-    }
-
-    private fun sendToApi(license: String, email: String, sender: String, body: String) {
-        val retrofit = Retrofit.Builder()
-            .baseUrl("https://script.google.com/")
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-
-        val api = retrofit.create(ApiService::class.java)
-
-        // Cria o objeto de dados (payload) usando a data class.
-        val payload = SmsPayload(
-            licenseKey = license,
-            targetEmail = email,
-            smsSender = sender,
-            smsBody = body,
-            timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
-        )
-
-        // Envia o objeto payload, que o Retrofit converterá para JSON.
-        api.sendSmsData(payload).enqueue(object : retrofit2.Callback<ResponseBody> {
-            override fun onResponse(call: retrofit2.Call<ResponseBody>, response: retrofit2.Response<ResponseBody>) {
-                if (response.isSuccessful) {
-                    val responseString = response.body()?.string()
-                    Log.d("API_SUCCESS", "✅ Sucesso! Código: ${response.code()}. Resposta: $responseString")
-                } else {
-                    val errorBodyString = response.errorBody()?.string()
-                    Log.e("API_ERROR", "❌ O servidor respondeu com ERRO: ${response.code()}. Resposta: $errorBodyString")
-                }
-            }
-
-            override fun onFailure(call: retrofit2.Call<ResponseBody>, t: Throwable) {
-                Log.e("API_ERROR", "💀 Falha grave na conexão: ${t.message}")
-            }
-        })
     }
 }

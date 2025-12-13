@@ -6,6 +6,13 @@
     <uses-permission android:name="android.permission.RECEIVE_SMS"/>
     <uses-permission android:name="android.permission.READ_SMS"/>
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Permissão genérica para foreground service, necessária para Android 13 e inferior -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Permissão específica para o tipo dataSync, necessária para Android 14 e superior -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -34,6 +41,13 @@
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
         </receiver>
+
+        <service
+            android:name=".SmsService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" >
+        </service>
     </application>
 
 </manifest>

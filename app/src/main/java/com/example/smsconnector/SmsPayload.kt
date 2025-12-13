@@ -12,5 +12,6 @@ data class SmsPayload(
     @SerializedName("target_email") val targetEmail: String,
     @SerializedName("sms_sender") val smsSender: String,
     @SerializedName("sms_body") val smsBody: String,
-    @SerializedName("timestamp") val timestamp: String
+    @SerializedName("timestamp") val timestamp: String,
+    @SerializedName("device_id") val deviceId: String
 )
