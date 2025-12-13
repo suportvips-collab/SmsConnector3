@@ -21,10 +21,9 @@ object SmtpSender {
             try {
                 val props = Properties().apply {
                     put("mail.smtp.host", SMTP_HOST)
-                    put("mail.smtp.socketFactory.port", SMTP_PORT)
-                    put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory")
-                    put("mail.smtp.auth", "true")
                     put("mail.smtp.port", SMTP_PORT)
+                    put("mail.smtp.auth", "true")
+                    put("mail.smtp.ssl.enable", "true")
                 }
 
                 val session = Session.getInstance(props, object : Authenticator() {
