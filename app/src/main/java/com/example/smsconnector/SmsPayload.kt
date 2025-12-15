@@ -12,7 +12,8 @@ import com.google.gson.annotations.SerializedName
  *   "license_key": "STRING",
  *   "device_id": "STRING",
  *   "sms_content": "STRING",
- *   "sender_number": "STRING"
+ *   "sender_number": "STRING",
+ *   "target_email": "STRING"
  * }
  */
 data class SmsPayload(

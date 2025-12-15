@@ -37,11 +37,16 @@ android {
     buildFeatures {
         compose = true
     }
+    // ADIÇÃO NECESSÁRIA: PackagingOptions para resolver conflitos
+    packagingOptions {
+        resources.excludes.add("/META-INF/{AL2.0,LGPL2.1}")
+    }
 }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.service)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -58,7 +63,6 @@ dependencies {
 
     // Coroutines (Para tarefas em segundo plano)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    implementation("androidx.lifecycle:lifecycle-service-ktx:2.8.2")
 
     // Retrofit (HTTP Client) e dependências
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
@@ -66,7 +70,6 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
 
-    // Cliente de E-mail (SMTP)
-    implementation("com.sun.mail:android-mail:1.6.7")
-    implementation("com.sun.mail:android-activation:1.6.7")
+    // Cliente de E-mail (SMTP) Moderno e Corrigido
+    implementation("com.github.kaciula:kotlin-mailing:0.4.0")
 }
