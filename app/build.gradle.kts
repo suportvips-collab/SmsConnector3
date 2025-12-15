@@ -58,6 +58,7 @@ dependencies {
 
     // Coroutines (Para tarefas em segundo plano)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("androidx.lifecycle:lifecycle-service-ktx:2.8.2")
 
     // Retrofit (HTTP Client) e dependências
     implementation("com.squareup.retrofit2:retrofit:2.9.0")

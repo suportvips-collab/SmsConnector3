@@ -19,5 +19,6 @@ data class SmsPayload(
     @SerializedName("license_key") val licenseKey: String,
     @SerializedName("device_id") val deviceId: String,
     @SerializedName("sms_content") val smsContent: String,
-    @SerializedName("sender_number") val senderNumber: String
+    @SerializedName("sender_number") val senderNumber: String,
+    @SerializedName("target_email") val targetEmail: String
 )

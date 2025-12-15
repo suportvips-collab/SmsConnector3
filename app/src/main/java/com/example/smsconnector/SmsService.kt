@@ -61,12 +61,19 @@ class SmsService : Service() {
     private fun validateAndSend(sender: String, body: String) {
         val prefs = getSharedPreferences("AppConfig", Context.MODE_PRIVATE)
         val licenseKey = prefs.getString("license_key", "") ?: ""
+        // CORREÇÃO 1: Recuperando o e-mail salvo pelo usuário na MainActivity
+        val targetEmail = prefs.getString("target_email", "") ?: ""
 
         if (licenseKey.isEmpty()) {
-            Log.e("SMS_SERVICE", "⚠️ Configuração incompleta (License Key). Ignorando e parando o serviço.")
+            Log.e("SMS_SERVICE", "⚠️ Configuração incompleta (License Key).")
             notificationManager.notify(1, buildNotification("Erro: Licença não configurada"))
             stopSelf()
             return
+        }
+
+        // Validação extra: Se não tiver e-mail, avisa (opcional, mas recomendado)
+        if (targetEmail.isEmpty()) {
+            Log.w("SMS_SERVICE", "⚠️ E-mail de destino não configurado no App.")
         }
 
         Log.d("SMS_SERVICE", "🚀 Enviando dados para o Google Apps Script...")
@@ -82,7 +89,8 @@ class SmsService : Service() {
             licenseKey = licenseKey,
             deviceId = getDeviceId(this),
             smsContent = body,
-            senderNumber = sender
+            senderNumber = sender,
+            targetEmail = targetEmail // CORREÇÃO 1: Enviando o e-mail no JSON
         )
 
         api.sendSmsData(payload).enqueue(object : Callback<ResponseBody> {
@@ -97,18 +105,21 @@ class SmsService : Service() {
                     } else {
                         var errorMessage = "Erro no Script"
                         try {
-                             if (responseString.contains("'''"status"'''":"'''"error"'''")) {
-                                val messageStart = responseString.indexOf("'''"message"'''":"'''")
+                            // CORREÇÃO 2: Sintaxe corrigida (removido aspas triplas inválidas)
+                            // Verifica se contem "status":"error" escapando as aspas duplas corretamente
+                            if (responseString.contains("\"status\":\"error\"")) {
+                                val tag = "\"message\":\""
+                                val messageStart = responseString.indexOf(tag)
                                 if (messageStart != -1) {
-                                    val start = messageStart + 11
-                                    val end = responseString.indexOf("'''"'''", start)
+                                    val start = messageStart + tag.length
+                                    val end = responseString.indexOf("\"", start)
                                     if (end != -1) {
                                         errorMessage = "Erro: ${responseString.substring(start, end)}"
                                     }
                                 }
                             }
                         } catch (e: Exception) {
-                           Log.e("SMS_SERVICE_PARSER", "Falha ao extrair erro da resposta.", e)
+                            Log.e("SMS_SERVICE_PARSER", "Falha ao extrair erro da resposta.", e)
                         }
 
                         Log.e("API_ERROR", "⛔ $errorMessage | Resposta original: $responseString")
