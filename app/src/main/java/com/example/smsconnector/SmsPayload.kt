@@ -6,12 +6,18 @@ import com.google.gson.annotations.SerializedName
  * Data Transfer Object (DTO) para enviar os dados do SMS para a API.
  * As anotações @SerializedName garantem que os nomes no JSON (snake_case)
  * correspondam corretamente às propriedades do Kotlin (camelCase).
+ *
+ * Estrutura baseada no README.md:
+ * {
+ *   "license_key": "STRING",
+ *   "device_id": "STRING",
+ *   "sms_content": "STRING",
+ *   "sender_number": "STRING"
+ * }
  */
 data class SmsPayload(
     @SerializedName("license_key") val licenseKey: String,
-    @SerializedName("target_email") val targetEmail: String,
-    @SerializedName("sms_sender") val smsSender: String,
-    @SerializedName("sms_body") val smsBody: String,
-    @SerializedName("timestamp") val timestamp: String,
-    @SerializedName("device_id") val deviceId: String // Campo para validar a licença por dispositivo
+    @SerializedName("device_id") val deviceId: String,
+    @SerializedName("sms_content") val smsContent: String,
+    @SerializedName("sender_number") val senderNumber: String
 )

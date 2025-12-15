@@ -11,27 +11,16 @@ import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import okhttp3.ResponseBody
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class SmsService : Service() {
 
     private val CHANNEL_ID = "SmsMonitorChannel"
-    // Escopo de Coroutine para o serviço, garantindo que as tarefas sejam canceladas quando o serviço for destruído.
-    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     // Obter o NotificationManager de forma preguiçosa (lazy) para otimização
     private val notificationManager by lazy {
@@ -61,7 +50,6 @@ class SmsService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        serviceScope.cancel() // Cancela todas as coroutines do escopo
         Log.d("SMS_SERVICE", "🛡️ Serviço Destruído (Blindagem Desativada)")
     }
 
@@ -72,16 +60,16 @@ class SmsService : Service() {
 
     private fun validateAndSend(sender: String, body: String) {
         val prefs = getSharedPreferences("AppConfig", Context.MODE_PRIVATE)
-        val targetEmail = prefs.getString("target_email", "") ?: ""
         val licenseKey = prefs.getString("license_key", "") ?: ""
 
-        if (targetEmail.isEmpty() || licenseKey.isEmpty()) {
-            Log.e("SMS_SERVICE", "⚠️ Configuração incompleta. Ignorando e parando o serviço.")
-            stopSelf() // Para o serviço se a configuração for removida enquanto ele roda
+        if (licenseKey.isEmpty()) {
+            Log.e("SMS_SERVICE", "⚠️ Configuração incompleta (License Key). Ignorando e parando o serviço.")
+            notificationManager.notify(1, buildNotification("Erro: Licença não configurada"))
+            stopSelf()
             return
         }
 
-        Log.d("SMS_SERVICE", "🚀 Validando licença com o Google...")
+        Log.d("SMS_SERVICE", "🚀 Enviando dados para o Google Apps Script...")
 
         val retrofit = Retrofit.Builder()
             .baseUrl("https://script.google.com/")
@@ -92,11 +80,9 @@ class SmsService : Service() {
 
         val payload = SmsPayload(
             licenseKey = licenseKey,
-            targetEmail = targetEmail,
-            smsSender = sender,
-            smsBody = body,
-            timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()),
-            deviceId = getDeviceId(this) // Envia o ID para validação
+            deviceId = getDeviceId(this),
+            smsContent = body,
+            senderNumber = sender
         )
 
         api.sendSmsData(payload).enqueue(object : Callback<ResponseBody> {
@@ -106,39 +92,18 @@ class SmsService : Service() {
                     Log.d("API_RESPOSTA", "Google respondeu: $responseString")
 
                     if (responseString.contains("success")) {
-                        Log.d("SMS_SERVICE", "✅ Licença Aprovada! Iniciando envio SMTP...")
-                        notificationManager.notify(1, buildNotification("Enviando E-mail... 📤"))
-
-                        serviceScope.launch {
-                            val emailSuccess = SmtpSender.sendEmail(
-                                toEmail = targetEmail,
-                                subject = "[SMS-SYNC] Novo SMS de $sender",
-                                body = "Remetente: $sender'''\n\n'''Conteúdo:'''\n'''$body'''\n\n'''Recebido em: ${Date()}"
-                            )
-
-                            // Volta para a thread principal para atualizar a UI (Notificação)
-                            withContext(Dispatchers.Main) {
-                                if (emailSuccess) {
-                                    Log.d("SMS_SERVICE", "🏆 CICLO COMPLETO: SMS -> Google -> SMTP -> Sucesso!")
-                                    notificationManager.notify(1, buildNotification("Último envio: Sucesso ✅"))
-                                } else {
-                                    Log.e("SMS_SERVICE", "❌ Falha no envio SMTP.")
-                                    notificationManager.notify(1, buildNotification("Erro no envio SMTP ❌"))
-                                }
-                            }
-                        }
+                        Log.d("SMS_SERVICE", "✅ Sucesso! Script processou a mensagem.")
+                        notificationManager.notify(1, buildNotification("Envio com sucesso! ✅"))
                     } else {
-                        var errorMessage = "Licença Inválida ou Erro no Script"
+                        var errorMessage = "Erro no Script"
                         try {
-                            if (responseString.contains("Document") && responseString.contains("missing")) {
-                                errorMessage = "Erro Google: Planilha não encontrada"
-                            } else if (responseString.contains("'''"status"'''":"'''"error"'''")) {
+                             if (responseString.contains("'''"status"'''":"'''"error"'''")) {
                                 val messageStart = responseString.indexOf("'''"message"'''":"'''")
                                 if (messageStart != -1) {
                                     val start = messageStart + 11
                                     val end = responseString.indexOf("'''"'''", start)
                                     if (end != -1) {
-                                        errorMessage = "Erro Google: ${responseString.substring(start, end)}"
+                                        errorMessage = "Erro: ${responseString.substring(start, end)}"
                                     }
                                 }
                             }
