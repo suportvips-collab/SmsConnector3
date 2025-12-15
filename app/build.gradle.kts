@@ -38,8 +38,10 @@ android {
         compose = true
     }
     // ADIÇÃO NECESSÁRIA: PackagingOptions para resolver conflitos
-    packagingOptions {
-        resources.excludes.add("/META-INF/{AL2.0,LGPL2.1}")
+    packaging {
+        resources {
+            excludes.add("/META-INF/{AL2.0,LGPL2.1}")
+        }
     }
 }
 
@@ -69,7 +71,4 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
-
-    // Cliente de E-mail (SMTP) Moderno e Corrigido
-    implementation("com.github.kaciula:kotlin-mailing:0.4.0")
 }
