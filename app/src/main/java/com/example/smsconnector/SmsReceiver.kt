@@ -29,10 +29,15 @@ class SmsReceiver : BroadcastReceiver() {
                 }
 
                 // Inicia o serviço em primeiro plano (necessário para APIs 26+)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(serviceIntent)
-                } else {
-                    context.startService(serviceIntent)
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.startForegroundService(serviceIntent)
+                    } else {
+                        context.startService(serviceIntent)
+                    }
+                } catch (e: Exception) {
+                    Log.e("SMS_RECEIVER", "❌ Erro ao iniciar serviço: ${e.message}")
+                    e.printStackTrace()
                 }
             }
         }

@@ -117,9 +117,31 @@ class SmsService : Service() {
                             }
                         }
                     } else {
-                        Log.e("API_ERROR", "⛔ Licença negada ou Erro Google: $responseString")
+                        // Tenta extrair a mensagem de erro específica do Google/Script
+                        var errorMessage = "Licença Inválida ou Erro no Script"
+                        try {
+                            // Verifica se é o erro de "Document missing"
+                            if (responseString.contains("Document") && responseString.contains("missing")) {
+                                errorMessage = "Erro Google: Planilha não encontrada (ID incorreto)"
+                            } else if (responseString.contains("\"status\":\"error\"")) {
+                                // Tenta pegar a mensagem de erro do JSON manualmente (para evitar overhead de parsing completo)
+                                // Exemplo: {"status":"error","message":"Error: Document ..."}
+                                val messageStart = responseString.indexOf("\"message\":\"")
+                                if (messageStart != -1) {
+                                    val start = messageStart + 11
+                                    val end = responseString.indexOf("\"", start)
+                                    if (end != -1) {
+                                        errorMessage = "Erro Google: ${responseString.substring(start, end)}"
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // Falha ao parsear erro
+                        }
+
+                        Log.e("API_ERROR", "⛔ $errorMessage | Resposta original: $responseString")
                         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                        notificationManager.notify(1, buildNotification("Licença Inválida/Bloqueada ⛔"))
+                        notificationManager.notify(1, buildNotification("⚠️ $errorMessage"))
                     }
 
                 } else {
