@@ -1,52 +1,70 @@
-package com.example.smsconnector
-
+import android.content.Context
+import android.provider.Settings
 import android.util.Log
-import javax.mail.*
-import javax.mail.internet.InternetAddress
-import javax.mail.internet.MimeMessage
-import java.util.Properties
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.IOException
 
-object SmtpSender {
+class SmsSenderService(private val context: Context) {
 
-    // CONFIGURAÇÕES DA HOSTINGER (Substitua pelos seus dados reais)
-    private const val SMTP_HOST = "smtp.hostinger.com"
-    private const val SMTP_PORT = "465" // Porta SSL
-    private const val SMTP_USER = "suportvips@master.suportvip.com" // Crie um email: no-reply@...
-    private const val SMTP_PASS = "M1lh&1r02025"
+    // URL do seu Web App (Do Deploy que você fez no Google Apps Script)
+    // IMPORTANTE: Deve terminar em /exec
+    private val SCRIPT_URL = "https://script.google.com/macros/s/SEU_ID_DO_SCRIPT_AQUI/exec"
 
-    suspend fun sendEmail(toEmail: String, subject: String, body: String): Boolean {
-        return withContext(Dispatchers.IO) {
-            try {
-                val props = Properties().apply {
-                    put("mail.smtp.host", SMTP_HOST)
-                    put("mail.smtp.port", SMTP_PORT)
-                    put("mail.smtp.auth", "true")
-                    put("mail.smtp.ssl.enable", "true")
-                }
+    private val client = OkHttpClient.Builder()
+        .followRedirects(true) // CRUCIAL: O Google redireciona a requisição
+        .followSslRedirects(true)
+        .build()
 
-                val session = Session.getInstance(props, object : Authenticator() {
-                    override fun getPasswordAuthentication(): PasswordAuthentication {
-                        return PasswordAuthentication(SMTP_USER, SMTP_PASS)
-                    }
-                })
+    fun sendSmsToSheet(smsBody: String, senderPhone: String, userToken: String) {
 
-                val message = MimeMessage(session).apply {
-                    setFrom(InternetAddress(SMTP_USER, "SMS Connector App"))
-                    setRecipients(Message.RecipientType.TO, InternetAddress.parse(toEmail))
-                    setSubject(subject)
-                    setText(body)
-                }
+        // 1. Pegar o ID do Dispositivo (O mesmo que será salvo na planilha)
+        val deviceId = Settings.Secure.getString(
+            context.contentResolver,
+            Settings.Secure.ANDROID_ID
+        )
 
-                Transport.send(message)
-                Log.d("SMTP", "📧 E-mail enviado via Hostinger para $toEmail")
-                true
-            } catch (e: Exception) {
-                Log.e("SMTP", "❌ Erro ao enviar e-mail: ${e.message}")
-                e.printStackTrace()
-                false
-            }
+        // 2. Montar o JSON (AQUI ESTÁ A REFERÊNCIA CORRETA COM O SCRIPT)
+        val json = JSONObject()
+        try {
+            // As chaves à esquerda DEVEM ser iguais às do script (data.license_key, etc.)
+            json.put("license_key", userToken)      // Script espera: license_key
+            json.put("device_id", deviceId)         // Script espera: device_id
+            json.put("sms_content", smsBody)        // Script espera: sms_content
+            json.put("sender_number", senderPhone)  // Script espera: sender_number
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return
         }
+
+        // 3. Preparar a Requisição
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        val body = json.toString().toRequestBody(mediaType)
+
+        val request = Request.Builder()
+            .url(SCRIPT_URL)
+            .post(body)
+            .build()
+
+        // 4. Enviar em Thread Separada (Network não pode rodar na Main Thread)
+        // Se estiver usando Coroutines, use Dispatchers.IO
+        Thread {
+            try {
+                val response = client.newCall(request).execute()
+                val responseBody = response.body?.string()
+
+                if (response.isSuccessful && responseBody != null) {
+                    Log.d("SuportvipSMS", "Sucesso: $responseBody")
+                    // Aqui você pode tratar a resposta "success_filtered" se quiser
+                } else {
+                    Log.e("SuportvipSMS", "Erro no envio: ${response.code}")
+                }
+            } catch (e: IOException) {
+                Log.e("SuportvipSMS", "Falha de conexão: ${e.message}")
+            }
+        }.start()
     }
 }

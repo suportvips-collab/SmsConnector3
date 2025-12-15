@@ -6,9 +6,7 @@ plugins {
 
 android {
     namespace = "com.example.smsconnector"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.smsconnector"
@@ -61,11 +59,13 @@ dependencies {
     // Coroutines (Para tarefas em segundo plano)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
-    // Retrofit (HTTP Client - O "HttpClient" do Android)
+    // Retrofit (HTTP Client) e dependências
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-    
-    // Cliente de E-mail (SMTP) - Versão estável e recomendada para Android (javax.mail)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.google.code.gson:gson:2.10.1")
+
+    // Cliente de E-mail (SMTP)
     implementation("com.sun.mail:android-mail:1.6.7")
     implementation("com.sun.mail:android-activation:1.6.7")
 }
