@@ -23,13 +23,7 @@ object SmtpSender {
                     put("mail.smtp.host", SMTP_HOST)
                     put("mail.smtp.port", SMTP_PORT)
                     put("mail.smtp.auth", "true")
-                    // Configuração SSL moderna e correta para Jakarta Mail
                     put("mail.smtp.ssl.enable", "true")
-                    put("mail.smtp.ssl.protocols", "TLSv1.2") // Forçar TLS 1.2
-                    put("mail.debug", "true") // Logs detalhados do SMTP
-                    // As propriedades abaixo (socketFactory) são legadas e foram removidas
-                    // put("mail.smtp.socketFactory.port", SMTP_PORT)
-                    // put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory")
                 }
 
                 val session = Session.getInstance(props, object : Authenticator() {
