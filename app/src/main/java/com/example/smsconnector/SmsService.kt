@@ -20,7 +20,6 @@ import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
-// Data class para parsear a resposta do Google Script
 data class ServerResponse(
     @SerializedName("status") val status: String?,
     @SerializedName("message") val message: String?
@@ -95,7 +94,6 @@ class SmsService : Service() {
 
         api.sendSmsData(payload).enqueue(object : Callback<ResponseBody> {
             override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
-                // Restaura a notificação de serviço para o estado padrão
                 notificationManager.notify(1, buildNotification("Aguardando novos SMS..."))
 
                 if (response.isSuccessful) {
@@ -162,7 +160,7 @@ class SmsService : Service() {
 
     private fun buildNotification(text: String): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("SMS Connector")
+            .setContentTitle("PlamilhaSMS")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_dialog_email)
             .setOngoing(true)

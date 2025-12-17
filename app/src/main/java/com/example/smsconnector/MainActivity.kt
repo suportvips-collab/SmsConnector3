@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
@@ -93,7 +94,7 @@ fun OnboardingWizard(onFinish: () -> Unit) {
 fun StepOneWelcome(onNext: () -> Unit) {
     WizardTemplate(
         icon = Icons.Default.Email,
-        title = "Bem-vindo ao SMS Connector",
+        title = "Bem-vindo ao PlamilhaSMS",
         description = "Este aplicativo conecta seus SMS bancários e de vendas diretamente à sua Planilha Google, via e-mail.\n\nSem configuração de servidor, simples e rápido.",
         buttonText = "Começar Configuração",
         onButtonClick = onNext
@@ -207,8 +208,13 @@ fun HomeScreen() {
     var email by remember { mutableStateOf(prefs.getString("target_email", "") ?: "") }
     var license by remember { mutableStateOf(prefs.getString("license_key", "") ?: "") }
     
+    // Estado de validação persistente
+    var isValidated by remember { mutableStateOf(prefs.getBoolean("config_valid", false)) }
+    
     // Estados para UX de Status
-    var statusText by remember { mutableStateOf("Serviço Ativo e Monitorando") }
+    var statusText by remember { 
+        mutableStateOf(if (isValidated) "Serviço Ativo e Monitorando" else "Aguardando Configuração") 
+    }
     var isError by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
 
@@ -222,7 +228,11 @@ fun HomeScreen() {
         // Status Card Dinâmico
         Card(
             colors = CardDefaults.cardColors(
-                containerColor = if (isError) Color(0xFFFFEBEE) else Color(0xFFE8F5E9)
+                containerColor = when {
+                    isError -> Color(0xFFFFEBEE) // Vermelho (Erro)
+                    !isValidated -> Color(0xFFFFF3E0) // Laranja (Pendente)
+                    else -> Color(0xFFE8F5E9) // Verde (Ativo)
+                }
             ),
             modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp)
         ) {
@@ -231,14 +241,26 @@ fun HomeScreen() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (isError) Icons.Default.Warning else Icons.Default.CheckCircle,
+                    imageVector = when {
+                        isError -> Icons.Default.Warning
+                        !isValidated -> Icons.Default.Info
+                        else -> Icons.Default.CheckCircle
+                    },
                     contentDescription = null,
-                    tint = if (isError) Color(0xFFC62828) else Color(0xFF2E7D32)
+                    tint = when {
+                        isError -> Color(0xFFC62828)
+                        !isValidated -> Color(0xFFE65100)
+                        else -> Color(0xFF2E7D32)
+                    }
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = statusText,
-                    color = if (isError) Color(0xFFB71C1C) else Color(0xFF1B5E20),
+                    color = when {
+                        isError -> Color(0xFFB71C1C)
+                        !isValidated -> Color(0xFFBF360C)
+                        else -> Color(0xFF1B5E20)
+                    },
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -281,7 +303,11 @@ fun HomeScreen() {
                 testConnection(context, email, license) { success, message ->
                     isLoading = false
                     isError = !success
-                    statusText = message
+                    isValidated = success
+                    statusText = if (success) "Serviço Ativo e Monitorando" else message
+                    
+                    // Salva o estado de validação
+                    prefs.edit().putBoolean("config_valid", success).apply()
                 }
             },
             modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -295,12 +321,21 @@ fun HomeScreen() {
 
         Button(
             onClick = {
+                if (email.isEmpty() || license.isEmpty()) {
+                    Toast.makeText(context, "Preencha os campos antes de salvar", Toast.LENGTH_SHORT).show()
+                    return@Button
+                }
+                
                 prefs.edit().apply {
                     putString("target_email", email)
                     putString("license_key", license)
+                    putBoolean("config_valid", true) 
                     apply()
                 }
-                Toast.makeText(context, "Configurações Salvas!", Toast.LENGTH_SHORT).show()
+                isValidated = true
+                isError = false
+                statusText = "Serviço Ativo e Monitorando"
+                Toast.makeText(context, "Configurações Salvas e Ativadas!", Toast.LENGTH_SHORT).show()
             },
             modifier = Modifier.fillMaxWidth().height(50.dp)
         ) {
@@ -310,7 +345,7 @@ fun HomeScreen() {
         Spacer(modifier = Modifier.height(24.dp))
 
         TextButton(onClick = {
-            prefs.edit().remove("setup_completed").apply()
+            prefs.edit().remove("setup_completed").remove("config_valid").apply()
             val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
             intent?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             context.startActivity(intent)
@@ -320,7 +355,6 @@ fun HomeScreen() {
     }
 }
 
-// Lógica de Teste de Conexão
 fun testConnection(context: Context, email: String, license: String, onResult: (Boolean, String) -> Unit) {
     val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "android_test"
     
