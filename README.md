@@ -84,3 +84,10 @@ Para garantir a integridade dos dados, entregamos ao cliente um arquivo com duas
   "sms_content": "Compra aprovada R$ 100,00 LOJA X",
   "sender_number": "27900"
 }
+
+⚠️ Notas de Segurança
+O Token é único e intransferível (Hardware Binding).
+
+O sistema não envia e-mails (evita bloqueio de cota e spam). O acesso é concedido via notificação nativa do Google Drive.
+
+Dados sensíveis trafegam via HTTPS diretamente para os servidores do Google.
