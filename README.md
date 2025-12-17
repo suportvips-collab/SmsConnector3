@@ -1,7 +1,86 @@
-📄 Relatório Técnico: Suportvip SMS Connector (Android ↔ Gmail)Versão: 1.0 (Google Workspace Edition)Objetivo: Capturar SMS em dispositivos Android e encaminhá-los via e-mail utilizando a infraestrutura do Google (Apps Script + Sheets + Gmail), contornando limitações de SMTP externo e garantindo alta entregabilidade.1. Visão Geral da ArquiteturaO sistema opera em um fluxo unidirecional (Do Aparelho para o E-mail), composto por 4 camadas:Cliente (Android App): Ouve os SMS, filtra localmente (opcional), empacota os dados e faz o envio seguro.API Gateway (Apps Script): Recebe a requisição POST, valida a segurança e processa a lógica de negócio.Banco de Dados (Google Sheets): Armazena a lista de usuários, tokens de licença, status de pagamento e vínculo de hardware (Device ID).Transporte (Gmail Nativo): Realiza o disparo do e-mail e a limpeza automática (autoexclusão) para privacidade.2. Fluxo de Dados Detalhado (Step-by-Step)Para corrigir bugs, siga este rastro. Se o processo parar, verifique a etapa correspondente.Etapa A: No Dispositivo Android (Origem)Gatilho: O Android recebe um SMS (android.provider.Telephony.SMS_RECEIVED).Captura: O BroadcastReceiver acorda, extrai o Corpo da Mensagem e o Número do Remetente.Autenticação Local: O App busca o user_token salvo nas preferências (SharedPreferences). Se não houver token (usuário deslogado), o processo morre aqui.Identidade: O App captura o device_id (Android ID) para garantir que a licença não está sendo clonada.Transmissão: O App monta um JSON e envia via POST para a URL do Web App (/exec).Ponto de Falha Comum: App sem internet ou bloqueio de economia de bateria do Android matando o processo de fundo.Etapa B: No Google Apps Script (Processamento)Handshake: O Script recebe o JSON. Se o JSON estiver quebrado ou chaves faltando, retorna erro imediato.Filtro de Conteúdo (Regex): Antes de qualquer coisa, verifica se o texto contém palavras proibidas ("bet365", "tigrinho", etc.). Se contiver, retorna success_filtered e não envia e-mail.Verificação de Infra: Checa a cota diária do Gmail (MailApp.getRemainingDailyQuota()). Se < 10, aborta para proteger a conta.Etapa C: Validação no Google Sheets (Regra de Negócio)Lookup: O script abre a aba Usuarios_Sms e varre a coluna de Tokens.Validações em Cascata:Token existe? (Não -> Erro)Status é "ATIVO"? (Não -> Erro)Data de Vencimento > Hoje? (Não -> Erro)Device ID bate com o registrado?Cenário 1 (Novo): Campo vazio na planilha -> Grava o ID recebido (Vinculação).Cenário 2 (Diferente): ID da planilha != ID recebido -> Bloqueia (Tentativa de fraude/uso em múltiplos aparelhos).Etapa D: Ação Final (Envio e Limpeza)Disparo: Se tudo for aprovado, monta o HTML e usa GmailApp.sendEmail para o e-mail cadastrado na planilha (Coluna C).Privacidade (Autoexclusão): O script aguarda 3 segundos, busca o e-mail na pasta "Enviados" pelo ID único no assunto e o move para a Lixeira.Resposta: Retorna JSON { "status": "success" } para o Android fechar a conexão.3. Especificações Técnicas dos Dados3.1 Payload JSON (Android -> Script)Ocorrerá erro se os nomes das chaves não forem exatamente estes:JSON{
-  "license_key": "STRING (Token do usuário)",
-  "device_id": "STRING (ID único do hardware)",
-  "sms_content": "STRING (Texto da mensagem)",
-  "sender_number": "STRING (Telefone de quem enviou)"
+# 📱 Suportvip SMS Connector
+
+> **Sincronização Automática de SMS para Google Sheets (SaaS)**
+
+O **Suportvip SMS Connector** é uma solução de engenharia de dados que captura mensagens SMS em tempo real de dispositivos Android e as estrutura automaticamente em Dashboards financeiros/operacionais no Google Sheets. O sistema opera de forma transparente, validando licenças e gerenciando permissões de acesso automaticamente.
+
+---
+
+## 🔄 Fluxo de Dados (Architecture Flow)
+
+O sistema segue uma arquitetura **Event-Driven** (orientada a eventos), onde a chegada de um SMS dispara todo o processo:
+
+1.  **Captura (Edge):** O App Android intercepta o SMS recebido (filtra SPAM via Regex local).
+2.  **Transmissão (API):** O App envia um payload JSON seguro para o Google Apps Script (Serverless).
+3.  **Validação (Auth):** O Script consulta a **Planilha Mestra**:
+    * Valida o Token de Licença.
+    * Verifica a Validade (Data) e Status (Ativo).
+    * Realiza o *Device Bind* (vincula o token ao ID único do hardware).
+4.  **Roteamento (Data Lake):** O Script localiza o ID da Planilha do Cliente específico.
+5.  **Persistência (Write):**
+    * Escreve os dados na aba oculta `DADOS_BRUTOS`.
+    * Aplica formatação automática (largura, data, efeito zebra).
+6.  **Auto-Onboarding (Share):** Se o e-mail do cliente ainda não tiver acesso, o Script compartilha a planilha automaticamente via Google Drive API.
+7.  **Feedback:** O Android recebe o status (`Success/Error`) e notifica o usuário localmente.
+
+---
+
+## 🚀 Funcionalidades Principais
+
+### 📱 Android App (Client)
+* **Background Service:** Roda silenciosamente, mesmo com o app fechado (requer permissão de bateria).
+* **Filtro Inteligente:** Ignora mensagens irrelevantes (promoções, operadora) usando Regex.
+* **Notificações Locais:** Feedback visual de sucesso ou erro de sincronização.
+* **Segurança:** Vinculação de Hardware (Token só funciona em 1 aparelho).
+
+### ☁️ Backend (Google Apps Script)
+* **Zero Infra:** Roda 100% na nuvem do Google (sem servidores VPS).
+* **Gestão de Licenças:** Controle centralizado de vencimento e bloqueio de usuários.
+* **Auto-Healing:** Tenta recuperar conexões e gerenciar erros de escrita.
+* **Drive Automation:** Concede permissão de edição/leitura ao cliente sem intervenção manual.
+
+---
+
+## 🛠️ Instalação e Configuração (Admin)
+
+### 1. Planilha Mestra (Database)
+Crie uma planilha com a aba `USUARIOS_SMS` contendo as colunas:
+* **A:** Email do Cliente (Google Account)
+* **B:** Device ID (Preenchido automaticamente pelo sistema)
+* **C:** Token (Gerado pelo menu Admin)
+* **D:** Vencimento (Data)
+* **E:** Status (`ATIVO` / `BLOQUEADO`)
+* **F:** ID Planilha Cliente (ID do arquivo Google Sheets de destino)
+
+### 2. Google Apps Script (API)
+1.  Implante o código `doPost` como **App da Web**.
+2.  **Executar como:** `Usuário implantando` (Sua conta Admin).
+3.  **Quem pode acessar:** `Qualquer pessoa` (Anônimo).
+4.  Configure o Manifesto (`appsscript.json`) com permissões de `Drive` e `Sheets`.
+
+### 3. App Android
+1.  No `NetworkLayer.kt`, insira a URL gerada pelo Apps Script.
+2.  Compile o APK e instale no dispositivo do cliente.
+3.  Garanta as permissões: *SMS, Notificações e Bateria Irrestrita*.
+
+---
+
+## 📊 Estrutura da Planilha do Cliente (Template)
+
+Para garantir a integridade dos dados, entregamos ao cliente um arquivo com duas camadas:
+
+* **Aba `DADOS_BRUTOS` (Oculta):** Onde o script escreve. Contém o histórico completo.
+* **Aba `DASHBOARD` (Visível):** Interface visual com gráficos e tabelas estilizadas usando a função `=QUERY()` para ler os dados brutos em tempo real.
+
+---
+
+## 📝 Exemplo de JSON (Payload)
+
+```json
+{
+  "license_key": "K9M4X2",
+  "device_id": "android_f82...",
+  "target_email": "cliente@gmail.com",
+  "sms_content": "Compra aprovada R$ 100,00 LOJA X",
+  "sender_number": "27900"
 }
-3.2 Mapeamento da Planilha (Database)Baseado no código atual. Se alterar a ordem das colunas na planilha, o código quebrará.Índice (Array JS)Coluna ExcelCampoFunção no Scriptrow[0]CE-mailDestinatário do alerta.row[1]DDevice IDSegurança (Lock de Hardware). O script GRAVA aqui se estiver vazio.row[2]ETokenChave primária de busca.row[3]FVencimentoData para validação de acesso.row[4]GStatusDeve ser "ATIVO" (Case sensitive).4. Códigos de Erro e DiagnósticoUse esta tabela para entender o que o App Android pode reportar nos Logs:Status JSONMensagem ProvávelCausa RaizSoluçãoerror"Credenciais incompletas"App enviou JSON faltando campos.Verificar código Kotlin (SmsSenderService).error"Token inválido"Token não existe na planilha.Verificar digitação na planilha ou no App.error"Licença inativa"Coluna G não está "ATIVO".Ajustar status na planilha.error"Licença vencida"Data na Coluna F é passado.Renovar data na planilha.error"Token vinculado a outro aparelho"O usuário trocou de celular.Apagar o conteúdo da célula da Coluna D para permitir novo vínculo.success_filtered"Mensagem filtrada..."Regex pegou palavra proibida.Funcionamento normal. Se for falso positivo, ajustar Regex.error"Limite diário... atingido"Cota do Gmail estourou (1500).Aguardar 24h ou usar outra conta Workspace.5. Procedimentos de ManutençãoComo resetar um usuário que trocou de celular?Vá na planilha Usuarios_Sms.Encontre a linha do usuário.Apague o conteúdo da Coluna D (Device ID).No próximo envio, o sistema vinculará o novo aparelho automaticamente.Como adicionar novas palavras ao filtro de spam?Abra o Apps Script.Edite a variável var REGEX_FILTRO_SMS.Adicione a palavra separada por | (pipe). Ex: ...|bet365|novo-spam|....Salve e clique em Implantar > Gerenciar Implantações > Editar > Nova Versão (Isso é crucial, senão a mudança não entra no ar).O e-mail não chega, mas o App diz "Sucesso".Verifique a Lixeira do Gmail da conta suportvip. O script move o e-mail para lá imediatamente.Verifique a pasta de Spam do destinatário final.6. Considerações de Segurança e PrivacidadeDados Sensíveis: O sistema foi desenhado para não armazenar o conteúdo do SMS na planilha (apenas metadados de envio são processados). O conteúdo reside apenas temporariamente no corpo do e-mail na Lixeira.API Exposta: A URL do Web App é pública. A segurança depende inteiramente do license_key. Recomenda-se tokens longos e aleatórios.Bateria do Android: O Android tende a matar serviços em segundo plano.Recomendação: Instruir o usuário a desativar "Otimização de Bateria" para o App Suportvip nas configurações do Android.
