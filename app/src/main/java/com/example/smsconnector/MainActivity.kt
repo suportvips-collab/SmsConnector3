@@ -13,15 +13,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,13 +32,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smsconnector.ui.theme.SmsConnectorTheme
+import com.google.gson.Gson
+import okhttp3.ResponseBody
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             SmsConnectorTheme {
-                // Controlador de Navegação Simples (Onboarding vs Home)
                 MainAppNavigation()
             }
         }
@@ -51,7 +55,6 @@ class MainActivity : ComponentActivity() {
 fun MainAppNavigation() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("AppConfig", Context.MODE_PRIVATE) }
-    // Se "setup_completed" for true, vai direto para a Home. Se não, Onboarding.
     var isSetupDone by remember { mutableStateOf(prefs.getBoolean("setup_completed", false)) }
 
     if (isSetupDone) {
@@ -64,11 +67,8 @@ fun MainAppNavigation() {
     }
 }
 
-// --- TELAS DO WIZARD (PASSO A PASSO) ---
-
 @Composable
 fun OnboardingWizard(onFinish: () -> Unit) {
-    // Controla qual passo do Wizard estamos (0, 1 ou 2)
     var currentStep by remember { mutableStateOf(0) }
 
     Scaffold { padding ->
@@ -105,7 +105,6 @@ fun StepTwoPermissions(onNext: () -> Unit) {
     val context = LocalContext.current
     var hasPermission by remember { mutableStateOf(false) }
 
-    // Launcher para pedir permissões de SMS
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -113,7 +112,6 @@ fun StepTwoPermissions(onNext: () -> Unit) {
         val readGranted = permissions[Manifest.permission.READ_SMS] ?: false
         if (smsGranted && readGranted) {
             hasPermission = true
-            Toast.makeText(context, "Permissões de SMS concedidas!", Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(context, "Precisamos ler o SMS para funcionar.", Toast.LENGTH_LONG).show()
         }
@@ -130,8 +128,7 @@ fun StepTwoPermissions(onNext: () -> Unit) {
             } else {
                 launcher.launch(arrayOf(Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS))
             }
-        },
-        isSecondaryAction = false
+        }
     )
 }
 
@@ -139,17 +136,13 @@ fun StepTwoPermissions(onNext: () -> Unit) {
 fun StepThreeBattery(onFinish: () -> Unit) {
     val context = LocalContext.current
     val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-
-    // Verifica se já está na lista de exceção de bateria
     var isIgnoringBattery by remember {
         mutableStateOf(powerManager.isIgnoringBatteryOptimizations(context.packageName))
     }
 
-    // Launcher para abrir a tela de configurações se precisar
     val settingsLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) {
-        // Ao voltar da tela de configurações, verifica novamente
         isIgnoringBattery = powerManager.isIgnoringBatteryOptimizations(context.packageName)
     }
 
@@ -168,7 +161,7 @@ fun StepThreeBattery(onFinish: () -> Unit) {
                     }
                     settingsLauncher.launch(intent)
                 } catch (e: Exception) {
-                    Toast.makeText(context, "Não foi possível abrir o ajuste automaticamente. Vá nas configurações.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "Não foi possível abrir o ajuste automaticamente.", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -181,8 +174,7 @@ fun WizardTemplate(
     title: String,
     description: String,
     buttonText: String,
-    onButtonClick: () -> Unit,
-    isSecondaryAction: Boolean = false
+    onButtonClick: () -> Unit
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(
@@ -198,8 +190,7 @@ fun WizardTemplate(
         Spacer(modifier = Modifier.height(48.dp))
         Button(
             onClick = onButtonClick,
-            modifier = Modifier.fillMaxWidth().height(50.dp),
-            colors = if (isSecondaryAction) ButtonDefaults.buttonColors(containerColor = Color.Gray) else ButtonDefaults.buttonColors()
+            modifier = Modifier.fillMaxWidth().height(50.dp)
         ) {
             Text(buttonText, fontSize = 18.sp)
         }
@@ -213,10 +204,13 @@ fun HomeScreen() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("AppConfig", Context.MODE_PRIVATE) }
 
-    // Estados dos campos
     var email by remember { mutableStateOf(prefs.getString("target_email", "") ?: "") }
     var license by remember { mutableStateOf(prefs.getString("license_key", "") ?: "") }
+    
+    // Estados para UX de Status
     var statusText by remember { mutableStateOf("Serviço Ativo e Monitorando") }
+    var isError by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -225,18 +219,28 @@ fun HomeScreen() {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Status Card
+        // Status Card Dinâmico
         Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isError) Color(0xFFFFEBEE) else Color(0xFFE8F5E9)
+            ),
             modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp)
         ) {
             Row(
                 modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2E7D32))
+                Icon(
+                    imageVector = if (isError) Icons.Default.Warning else Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = if (isError) Color(0xFFC62828) else Color(0xFF2E7D32)
+                )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(text = statusText, color = Color(0xFF1B5E20), fontWeight = FontWeight.Bold)
+                Text(
+                    text = statusText,
+                    color = if (isError) Color(0xFFB71C1C) else Color(0xFF1B5E20),
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 
@@ -263,6 +267,32 @@ fun HomeScreen() {
 
         Spacer(modifier = Modifier.height(32.dp))
 
+        // BOTÃO TESTE DE CONEXÃO
+        OutlinedButton(
+            onClick = {
+                if (email.isEmpty() || license.isEmpty()) {
+                    Toast.makeText(context, "Preencha os campos antes de testar", Toast.LENGTH_SHORT).show()
+                    return@OutlinedButton
+                }
+                isLoading = true
+                statusText = "Testando conexão..."
+                isError = false
+                
+                testConnection(context, email, license) { success, message ->
+                    isLoading = false
+                    isError = !success
+                    statusText = message
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            enabled = !isLoading
+        ) {
+            if (isLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp))
+            else Text("Testar Conexão Agora")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         Button(
             onClick = {
                 prefs.edit().apply {
@@ -277,12 +307,10 @@ fun HomeScreen() {
             Text("Salvar Alterações")
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // Botão de Reset (para testar o Wizard novamente se precisar)
         TextButton(onClick = {
             prefs.edit().remove("setup_completed").apply()
-            // Reinicia a Activity para voltar ao Wizard
             val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
             intent?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             context.startActivity(intent)
@@ -290,4 +318,46 @@ fun HomeScreen() {
             Text("Resetar App (Voltar ao Wizard)", color = Color.Gray)
         }
     }
+}
+
+// Lógica de Teste de Conexão
+fun testConnection(context: Context, email: String, license: String, onResult: (Boolean, String) -> Unit) {
+    val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "android_test"
+    
+    val retrofit = Retrofit.Builder()
+        .baseUrl("https://script.google.com/")
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+
+    val api = retrofit.create(ApiService::class.java)
+    val payload = SmsPayload(
+        licenseKey = license,
+        deviceId = deviceId,
+        smsContent = "TESTE DE CONEXÃO - INICIANDO SISTEMA",
+        senderNumber = "SISTEMA",
+        targetEmail = email
+    )
+
+    api.sendSmsData(payload).enqueue(object : Callback<ResponseBody> {
+        override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
+            if (response.isSuccessful) {
+                val responseString = response.body()?.string() ?: ""
+                val serverResponse = try {
+                    Gson().fromJson(responseString, ServerResponse::class.java)
+                } catch (e: Exception) { null }
+
+                if (serverResponse?.status == "success") {
+                    onResult(true, "Conexão Ok: ${serverResponse.message}")
+                } else {
+                    onResult(false, "Falha: ${serverResponse?.message ?: "Resposta inválida"}")
+                }
+            } else {
+                onResult(false, "Erro de Servidor: Código ${response.code()}")
+            }
+        }
+
+        override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
+            onResult(false, "Sem Internet ou Servidor Offline")
+        }
+    })
 }
