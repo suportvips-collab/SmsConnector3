@@ -398,7 +398,7 @@ fun HomeScreen() {
 
 fun testConnection(context: Context, email: String, license: String, onResult: (Boolean, String) -> Unit) {
     val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "android_test"
-    
+
     val retrofit = Retrofit.Builder()
         .baseUrl("https://script.google.com/")
         .addConverterFactory(GsonConverterFactory.create())
@@ -412,6 +412,7 @@ fun testConnection(context: Context, email: String, license: String, onResult: (
         senderNumber = "SISTEMA",
         targetEmail = email.trim()
     )
+
 
     api.sendSmsData(payload).enqueue(object : Callback<ResponseBody> {
         override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
