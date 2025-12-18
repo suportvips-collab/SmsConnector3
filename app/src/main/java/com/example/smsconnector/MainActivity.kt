@@ -14,6 +14,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
@@ -32,7 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.smsconnector.ui.theme.SmsConnectorTheme
+import com.example.smsconnector.ui.theme.*
 import com.google.gson.Gson
 import okhttp3.ResponseBody
 import retrofit2.Call
@@ -46,7 +48,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             SmsConnectorTheme {
-                MainAppNavigation()
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = VipBlack
+                ) {
+                    MainAppNavigation()
+                }
             }
         }
     }
@@ -72,21 +79,20 @@ fun MainAppNavigation() {
 fun OnboardingWizard(onFinish: () -> Unit) {
     var currentStep by remember { mutableStateOf(0) }
 
-    Scaffold { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            when (currentStep) {
-                0 -> StepOneWelcome { currentStep = 1 }
-                1 -> StepTwoPermissions { currentStep = 2 }
-                2 -> StepThreeBattery(onFinish)
-            }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.Center, // Volta ao centro para equilíbrio
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        when (currentStep) {
+            0 -> StepOneWelcome { currentStep = 1 }
+            1 -> StepTwoPermissions { currentStep = 2 }
+            2 -> StepThreeBattery(onFinish)
         }
+        Spacer(modifier = Modifier.height(80.dp)) // Empurra levemente para cima
     }
 }
 
@@ -95,8 +101,8 @@ fun StepOneWelcome(onNext: () -> Unit) {
     WizardTemplate(
         icon = Icons.Default.Email,
         title = "Bem-vindo ao PlamilhaSMS",
-        description = "Este aplicativo conecta seus SMS bancários e de vendas diretamente à sua Planilha Google, via e-mail.\n\nSem configuração de servidor, simples e rápido.",
-        buttonText = "Começar Configuração",
+        description = "Conecte seus SMS de milhas e bancos diretamente à sua planilha com estilo neon.",
+        buttonText = "iniciar configuração",
         onButtonClick = onNext
     )
 }
@@ -114,15 +120,15 @@ fun StepTwoPermissions(onNext: () -> Unit) {
         if (smsGranted && readGranted) {
             hasPermission = true
         } else {
-            Toast.makeText(context, "Precisamos ler o SMS para funcionar.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Permissões necessárias para o sistema.", Toast.LENGTH_LONG).show()
         }
     }
 
     WizardTemplate(
         icon = Icons.Default.Lock,
-        title = "Permissões de Acesso",
-        description = "Para funcionar, o app precisa ler os SMS que chegam no seu celular.\n\nSeus dados são processados localmente e enviados apenas para o seu e-mail configurado.",
-        buttonText = if (hasPermission) "Próximo Passo" else "Conceder Permissões",
+        title = "acesso seguro",
+        description = "Precisamos ler seus SMS para processá-los. Seus dados nunca saem do seu controle.",
+        buttonText = if (hasPermission) "próximo passo" else "conceder acesso",
         onButtonClick = {
             if (hasPermission) {
                 onNext()
@@ -134,7 +140,7 @@ fun StepTwoPermissions(onNext: () -> Unit) {
 }
 
 @Composable
-fun StepThreeBattery(onFinish: () -> Unit) {
+fun StepThreeBattery(onNext: () -> Unit) {
     val context = LocalContext.current
     val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
     var isIgnoringBattery by remember {
@@ -149,12 +155,12 @@ fun StepThreeBattery(onFinish: () -> Unit) {
 
     WizardTemplate(
         icon = Icons.Default.Settings,
-        title = "Rodar em 2º Plano",
-        description = "O Android costuma 'matar' aplicativos para economizar bateria.\n\nPara garantir que nenhum SMS seja perdido, você precisa permitir que este app rode sem restrições.",
-        buttonText = if (isIgnoringBattery) "Finalizar e Conectar" else "Remover Restrições",
+        title = "blindagem ativa",
+        description = "Para garantir 100% de entrega, o sistema precisa rodar sem restrições de bateria.",
+        buttonText = if (isIgnoringBattery) "finalizar e ativar" else "ativar blindagem",
         onButtonClick = {
             if (isIgnoringBattery) {
-                onFinish()
+                onNext()
             } else {
                 try {
                     val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
@@ -162,7 +168,7 @@ fun StepThreeBattery(onFinish: () -> Unit) {
                     }
                     settingsLauncher.launch(intent)
                 } catch (e: Exception) {
-                    Toast.makeText(context, "Não foi possível abrir o ajuste automaticamente.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "Abra os ajustes manualmente.", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -181,24 +187,35 @@ fun WizardTemplate(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(100.dp),
-            tint = MaterialTheme.colorScheme.primary
+            modifier = Modifier.size(80.dp),
+            tint = NeonPurple
         )
         Spacer(modifier = Modifier.height(32.dp))
-        Text(text = title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text(
+            text = title, 
+            style = MaterialTheme.typography.headlineSmall, 
+            color = VipWhite,
+            textAlign = TextAlign.Center
+        )
         Spacer(modifier = Modifier.height(16.dp))
-        Text(text = description, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
+        Text(
+            text = description, 
+            style = MaterialTheme.typography.bodyLarge, 
+            color = VipGrey,
+            textAlign = TextAlign.Center
+        )
         Spacer(modifier = Modifier.height(48.dp))
         Button(
             onClick = onButtonClick,
-            modifier = Modifier.fillMaxWidth().height(50.dp)
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = NeonPurple)
         ) {
-            Text(buttonText, fontSize = 18.sp)
+            Text(buttonText, color = VipWhite, fontSize = 16.sp)
         }
     }
 }
 
-// --- TELA PRINCIPAL (HOME) ---
+// --- TELA PRINCIPAL (HOME) NEON ---
 
 @Composable
 fun HomeScreen() {
@@ -208,12 +225,13 @@ fun HomeScreen() {
     var email by remember { mutableStateOf(prefs.getString("target_email", "") ?: "") }
     var license by remember { mutableStateOf(prefs.getString("license_key", "") ?: "") }
     
-    // Estado de validação persistente
+    var emailError by remember { mutableStateOf(false) }
+    var licenseError by remember { mutableStateOf(false) }
+    
     var isValidated by remember { mutableStateOf(prefs.getBoolean("config_valid", false)) }
     
-    // Estados para UX de Status
     var statusText by remember { 
-        mutableStateOf(if (isValidated) "Serviço Ativo e Monitorando" else "Aguardando Configuração") 
+        mutableStateOf(if (isValidated) "sistema ativo e monitorando" else "aguardando ativação") 
     }
     var isError by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
@@ -221,17 +239,28 @@ fun HomeScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center // Equilibrado no centro
     ) {
-        // Status Card Dinâmico
+        // TÍTULO NEON MAIOR
+        Text(
+            text = "PlamilhaSMS",
+            style = MaterialTheme.typography.headlineMedium,
+            color = NeonPurple,
+            letterSpacing = 1.sp
+        )
+        
+        Spacer(modifier = Modifier.height(48.dp))
+
+        // STATUS CARD DINÂMICO NEON
         Card(
             colors = CardDefaults.cardColors(
                 containerColor = when {
-                    isError -> Color(0xFFFFEBEE) // Vermelho (Erro)
-                    !isValidated -> Color(0xFFFFF3E0) // Laranja (Pendente)
-                    else -> Color(0xFFE8F5E9) // Verde (Ativo)
+                    isError -> VipError.copy(alpha = 0.15f)
+                    !isValidated -> NeonPurple.copy(alpha = 0.1f)
+                    else -> VipSuccess.copy(alpha = 0.15f)
                 }
             ),
             modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp)
@@ -248,110 +277,122 @@ fun HomeScreen() {
                     },
                     contentDescription = null,
                     tint = when {
-                        isError -> Color(0xFFC62828)
-                        !isValidated -> Color(0xFFE65100)
-                        else -> Color(0xFF2E7D32)
+                        isError -> VipError
+                        !isValidated -> NeonPurple
+                        else -> VipSuccess
                     }
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     text = statusText,
                     color = when {
-                        isError -> Color(0xFFB71C1C)
-                        !isValidated -> Color(0xFFBF360C)
-                        else -> Color(0xFF1B5E20)
+                        isError -> VipError
+                        !isValidated -> NeonPurple
+                        else -> VipSuccess
                     },
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.labelLarge,
+                    fontSize = 14.sp
                 )
             }
         }
 
-        Text(text = "Configurações", style = MaterialTheme.typography.headlineSmall)
-        Spacer(modifier = Modifier.height(24.dp))
-
+        // CAMPO E-MAIL
         OutlinedTextField(
             value = email,
-            onValueChange = { email = it },
-            label = { Text("E-mail de Destino") },
+            onValueChange = { 
+                email = it
+                emailError = false 
+            },
+            label = { Text("e-mail de destino", style = MaterialTheme.typography.bodySmall) },
             modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { Icon(Icons.Default.Email, null) }
+            isError = emailError,
+            leadingIcon = { Icon(Icons.Default.Email, null, tint = if (emailError) VipError else NeonPurple) },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = NeonPurple,
+                unfocusedBorderColor = VipGrey.copy(alpha = 0.5f),
+                focusedLabelColor = NeonPurple,
+                errorBorderColor = VipError,
+                cursorColor = NeonPurple,
+                focusedTextColor = VipWhite,
+                unfocusedTextColor = VipWhite
+            )
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // CAMPO LICENÇA
         OutlinedTextField(
             value = license,
-            onValueChange = { license = it },
-            label = { Text("Chave de Licença") },
+            onValueChange = { 
+                license = it
+                licenseError = false 
+            },
+            label = { Text("chave de licença", style = MaterialTheme.typography.bodySmall) },
             modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { Icon(Icons.Default.Lock, null) }
+            isError = licenseError,
+            leadingIcon = { Icon(Icons.Default.Lock, null, tint = if (licenseError) VipError else NeonPurple) },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = NeonPurple,
+                unfocusedBorderColor = VipGrey.copy(alpha = 0.5f),
+                focusedLabelColor = NeonPurple,
+                errorBorderColor = VipError,
+                cursorColor = NeonPurple,
+                focusedTextColor = VipWhite,
+                unfocusedTextColor = VipWhite
+            )
         )
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // BOTÃO TESTE DE CONEXÃO
-        OutlinedButton(
+        // BOTÃO ATIVAR
+        Button(
             onClick = {
-                if (email.isEmpty() || license.isEmpty()) {
-                    Toast.makeText(context, "Preencha os campos antes de testar", Toast.LENGTH_SHORT).show()
-                    return@OutlinedButton
+                emailError = email.isEmpty()
+                licenseError = license.isEmpty()
+                
+                if (emailError || licenseError) {
+                    Toast.makeText(context, "preencha os campos destacados", Toast.LENGTH_SHORT).show()
+                    return@Button
                 }
+                
                 isLoading = true
-                statusText = "Testando conexão..."
+                statusText = "validando acesso..."
                 isError = false
                 
                 testConnection(context, email, license) { success, message ->
                     isLoading = false
                     isError = !success
                     isValidated = success
-                    statusText = if (success) "Serviço Ativo e Monitorando" else message
+                    statusText = if (success) "sistema ativo e monitorando" else message.lowercase()
                     
-                    // Salva o estado de validação
-                    prefs.edit().putBoolean("config_valid", success).apply()
+                    if (!success) {
+                        if (message.lowercase().contains("licença") || message.lowercase().contains("token")) {
+                            licenseError = true
+                        } else if (message.lowercase().contains("e-mail")) {
+                            emailError = true
+                        }
+                    } else {
+                        prefs.edit().apply {
+                            putString("target_email", email)
+                            putString("license_key", license)
+                            putBoolean("config_valid", true)
+                            apply()
+                        }
+                    }
                 }
             },
-            modifier = Modifier.fillMaxWidth().height(50.dp),
-            enabled = !isLoading
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = NeonPurple)
         ) {
-            if (isLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp))
-            else Text("Testar Conexão Agora")
+            if (isLoading) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = VipWhite)
+            } else {
+                Text("ativar sistema", color = VipWhite, fontSize = 16.sp)
+            }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(
-            onClick = {
-                if (email.isEmpty() || license.isEmpty()) {
-                    Toast.makeText(context, "Preencha os campos antes de salvar", Toast.LENGTH_SHORT).show()
-                    return@Button
-                }
-                
-                prefs.edit().apply {
-                    putString("target_email", email)
-                    putString("license_key", license)
-                    putBoolean("config_valid", true) 
-                    apply()
-                }
-                isValidated = true
-                isError = false
-                statusText = "Serviço Ativo e Monitorando"
-                Toast.makeText(context, "Configurações Salvas e Ativadas!", Toast.LENGTH_SHORT).show()
-            },
-            modifier = Modifier.fillMaxWidth().height(50.dp)
-        ) {
-            Text("Salvar Alterações")
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        TextButton(onClick = {
-            prefs.edit().remove("setup_completed").remove("config_valid").apply()
-            val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-            intent?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            context.startActivity(intent)
-        }) {
-            Text("Resetar App (Voltar ao Wizard)", color = Color.Gray)
-        }
+        // ESPAÇADOR ESTRATÉGICO para empurrar o layout sutilmente para cima
+        Spacer(modifier = Modifier.height(100.dp))
     }
 }
 
@@ -365,11 +406,11 @@ fun testConnection(context: Context, email: String, license: String, onResult: (
 
     val api = retrofit.create(ApiService::class.java)
     val payload = SmsPayload(
-        licenseKey = license,
+        licenseKey = license.trim().uppercase(),
         deviceId = deviceId,
-        smsContent = "TESTE DE CONEXÃO - INICIANDO SISTEMA",
+        smsContent = "TESTE DE CONEXÃO - PLAMILHAS ATIVADA",
         senderNumber = "SISTEMA",
-        targetEmail = email
+        targetEmail = email.trim()
     )
 
     api.sendSmsData(payload).enqueue(object : Callback<ResponseBody> {
@@ -381,17 +422,17 @@ fun testConnection(context: Context, email: String, license: String, onResult: (
                 } catch (e: Exception) { null }
 
                 if (serverResponse?.status == "success") {
-                    onResult(true, "Conexão Ok: ${serverResponse.message}")
+                    onResult(true, "ativado: ${serverResponse.message}")
                 } else {
-                    onResult(false, "Falha: ${serverResponse?.message ?: "Resposta inválida"}")
+                    onResult(false, serverResponse?.message ?: "falha na ativação")
                 }
             } else {
-                onResult(false, "Erro de Servidor: Código ${response.code()}")
+                onResult(false, "servidor ocupado (${response.code()})")
             }
         }
 
         override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
-            onResult(false, "Sem Internet ou Servidor Offline")
+            onResult(false, "verifique sua conexão")
         }
     })
 }

@@ -64,18 +64,19 @@ class SmsService : Service() {
 
     private fun validateAndSend(sender: String, body: String) {
         val prefs = getSharedPreferences("AppConfig", Context.MODE_PRIVATE)
-        val licenseKey = prefs.getString("license_key", "") ?: ""
-        val targetEmail = prefs.getString("target_email", "") ?: ""
+        
+        // REFORÇO: Trim e Uppercase para evitar erros de digitação com letras
+        val licenseKey = prefs.getString("license_key", "")?.trim()?.uppercase() ?: ""
+        val targetEmail = prefs.getString("target_email", "")?.trim() ?: ""
 
         if (licenseKey.isEmpty() || targetEmail.isEmpty()) {
             val errorMessage = "Licença ou E-mail não configurado."
             Log.e("SMS_SERVICE", "⚠️ $errorMessage")
             NotificationHelper.showNotification(this, "Configuração Incompleta", errorMessage, isError = true)
-            stopSelf()
             return
         }
 
-        Log.d("SMS_SERVICE", "🚀 Enviando dados para o Google Apps Script...")
+        Log.d("SMS_SERVICE", "🚀 Enviando SMS via API (Token: $licenseKey)...")
 
         val retrofit = Retrofit.Builder()
             .baseUrl("https://script.google.com/")
@@ -100,16 +101,15 @@ class SmsService : Service() {
                     val responseString = response.body()?.string()
                     if (responseString != null) {
                         Log.d("API_RESPOSTA", "Google respondeu: $responseString")
-                        val gson = Gson()
                         val serverResponse = try {
-                            gson.fromJson(responseString, ServerResponse::class.java)
+                            Gson().fromJson(responseString, ServerResponse::class.java)
                         } catch (e: Exception) {
                             Log.e("SMS_SERVICE_PARSER", "Falha ao parsear JSON", e)
-                            ServerResponse("error", "Resposta JSON inválida do servidor.")
+                            ServerResponse("error", "Resposta JSON inválida.")
                         }
 
                         val jsonStatus = serverResponse.status ?: "error"
-                        val jsonMessage = serverResponse.message ?: "Resposta vazia do servidor"
+                        val jsonMessage = serverResponse.message ?: "Resposta vazia"
 
                         if (jsonStatus == "success") {
                             NotificationHelper.showNotification(
@@ -121,24 +121,17 @@ class SmsService : Service() {
                         } else {
                             NotificationHelper.showNotification(
                                 context = applicationContext,
-                                title = "Falha no Envio",
+                                title = "Falha no Token/Licença",
                                 message = jsonMessage,
                                 isError = true
                             )
                         }
-                    } else {
-                        NotificationHelper.showNotification(
-                            context = applicationContext,
-                            title = "Erro de Servidor",
-                            message = "O servidor retornou uma resposta vazia.",
-                            isError = true
-                        )
                     }
                 } else {
                     NotificationHelper.showNotification(
                         context = applicationContext,
                         title = "Erro de Servidor",
-                        message = "O servidor do Google retornou erro: ${response.code()}. Tente novamente mais tarde.",
+                        message = "Erro HTTP: ${response.code()}",
                         isError = true
                     )
                 }
@@ -146,12 +139,10 @@ class SmsService : Service() {
 
             override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
                 notificationManager.notify(1, buildNotification("Aguardando novos SMS..."))
-                Log.e("API_ERROR", "💀 Falha de conexão com o Google: ${t.message}", t)
-
                 NotificationHelper.showNotification(
                     context = applicationContext,
                     title = "Sem Conexão",
-                    message = "Não foi possível conectar. Verifique sua internet.",
+                    message = "Falha ao conectar com o servidor.",
                     isError = true
                 )
             }
