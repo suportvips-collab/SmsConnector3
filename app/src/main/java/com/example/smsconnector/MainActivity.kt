@@ -1,6 +1,7 @@
 package com.example.smsconnector
 
 import android.Manifest
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -13,21 +14,20 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColor
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -84,7 +84,7 @@ fun OnboardingWizard(onFinish: () -> Unit) {
             .fillMaxSize()
             .padding(24.dp)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.Center, // Volta ao centro para equilíbrio
+        verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         when (currentStep) {
@@ -92,7 +92,7 @@ fun OnboardingWizard(onFinish: () -> Unit) {
             1 -> StepTwoPermissions { currentStep = 2 }
             2 -> StepThreeBattery(onFinish)
         }
-        Spacer(modifier = Modifier.height(80.dp)) // Empurra levemente para cima
+        Spacer(modifier = Modifier.height(80.dp))
     }
 }
 
@@ -140,7 +140,7 @@ fun StepTwoPermissions(onNext: () -> Unit) {
 }
 
 @Composable
-fun StepThreeBattery(onNext: () -> Unit) {
+fun StepThreeBattery(onFinish: () -> Unit) {
     val context = LocalContext.current
     val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
     var isIgnoringBattery by remember {
@@ -160,7 +160,7 @@ fun StepThreeBattery(onNext: () -> Unit) {
         buttonText = if (isIgnoringBattery) "finalizar e ativar" else "ativar blindagem",
         onButtonClick = {
             if (isIgnoringBattery) {
-                onNext()
+                onFinish()
             } else {
                 try {
                     val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
@@ -215,12 +215,11 @@ fun WizardTemplate(
     }
 }
 
-// --- TELA PRINCIPAL (HOME) NEON ---
-
 @Composable
 fun HomeScreen() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("AppConfig", Context.MODE_PRIVATE) }
+    val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 
     var email by remember { mutableStateOf(prefs.getString("target_email", "") ?: "") }
     var license by remember { mutableStateOf(prefs.getString("license_key", "") ?: "") }
@@ -236,25 +235,51 @@ fun HomeScreen() {
     var isError by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
 
+    val infiniteTransition = rememberInfiniteTransition(label = "neon_vibrant")
+    val neonColor by infiniteTransition.animateColor(
+        initialValue = NeonPurple,
+        targetValue = NeonMagenta,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "neon_color"
+    )
+
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.10f, 
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(24.dp)
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center // Equilibrado no centro
+        verticalArrangement = Arrangement.Center 
     ) {
-        // TÍTULO NEON MAIOR
         Text(
             text = "PlamilhaSMS",
-            style = MaterialTheme.typography.headlineMedium,
-            color = NeonPurple,
+            style = MaterialTheme.typography.headlineMedium.copy(
+                shadow = Shadow(
+                    color = neonColor,
+                    blurRadius = 45f 
+                )
+            ),
+            color = neonColor,
+            modifier = Modifier
+                .graphicsLayer(scaleX = scale, scaleY = scale),
             letterSpacing = 1.sp
         )
         
         Spacer(modifier = Modifier.height(48.dp))
 
-        // STATUS CARD DINÂMICO NEON
         Card(
             colors = CardDefaults.cardColors(
                 containerColor = when {
@@ -270,33 +295,21 @@ fun HomeScreen() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = when {
-                        isError -> Icons.Default.Warning
-                        !isValidated -> Icons.Default.Info
-                        else -> Icons.Default.CheckCircle
-                    },
+                    imageVector = if (isError) Icons.Default.Warning else if (!isValidated) Icons.Default.Info else Icons.Default.CheckCircle,
                     contentDescription = null,
-                    tint = when {
-                        isError -> VipError
-                        !isValidated -> NeonPurple
-                        else -> VipSuccess
-                    }
+                    tint = if (isError) VipError else if (!isValidated) NeonPurple else VipSuccess
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     text = statusText,
-                    color = when {
-                        isError -> VipError
-                        !isValidated -> NeonPurple
-                        else -> VipSuccess
-                    },
+                    color = if (isError) VipError else if (!isValidated) NeonPurple else VipSuccess,
                     style = MaterialTheme.typography.labelLarge,
                     fontSize = 14.sp
                 )
             }
         }
 
-        // CAMPO E-MAIL
+        // CAMPO E-MAIL (LIMPO)
         OutlinedTextField(
             value = email,
             onValueChange = { 
@@ -320,7 +333,7 @@ fun HomeScreen() {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // CAMPO LICENÇA
+        // CAMPO LICENÇA COM ÍCONE DE COLAR ENFÁTICO (Build)
         OutlinedTextField(
             value = license,
             onValueChange = { 
@@ -331,6 +344,19 @@ fun HomeScreen() {
             modifier = Modifier.fillMaxWidth(),
             isError = licenseError,
             leadingIcon = { Icon(Icons.Default.Lock, null, tint = if (licenseError) VipError else NeonPurple) },
+            trailingIcon = {
+                IconButton(onClick = {
+                    val clip = clipboardManager.primaryClip
+                    if (clip != null && clip.itemCount > 0) {
+                        license = clip.getItemAt(0).text.toString()
+                        licenseError = false
+                        Toast.makeText(context, "Chave colada", Toast.LENGTH_SHORT).show()
+                    }
+                }) {
+                    // Ícone Build é garantido e visualmente forte
+                    Icon(imageVector = Icons.Default.Build, contentDescription = "Colar", tint = VipGrey)
+                }
+            },
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = NeonPurple,
                 unfocusedBorderColor = VipGrey.copy(alpha = 0.5f),
@@ -344,7 +370,6 @@ fun HomeScreen() {
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // BOTÃO ATIVAR
         Button(
             onClick = {
                 emailError = email.isEmpty()
@@ -391,7 +416,6 @@ fun HomeScreen() {
             }
         }
 
-        // ESPAÇADOR ESTRATÉGICO para empurrar o layout sutilmente para cima
         Spacer(modifier = Modifier.height(100.dp))
     }
 }
@@ -412,7 +436,6 @@ fun testConnection(context: Context, email: String, license: String, onResult: (
         senderNumber = "SISTEMA",
         targetEmail = email.trim()
     )
-
 
     api.sendSmsData(payload).enqueue(object : Callback<ResponseBody> {
         override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
